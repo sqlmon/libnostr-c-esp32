@@ -13,6 +13,7 @@ Status values: **found** / **issue opened** / **PR opened** / **merged**.
 | 3 | [test_zap_verify uses inconsistent test data](#3-test_zap_verify-uses-inconsistent-test-data) | found |
 | 4 | [Fallback test runner does not count failures](#4-fallback-test-runner-does-not-count-failures) | found |
 | 5 | [Windows CI ignores test failures](#5-windows-ci-ignores-test-failures) | found |
+| 6 | [ESP-IDF smoke app only builds from a folder named libnostr-c](#6-esp-idf-smoke-app-only-builds-from-a-folder-named-libnostr-c) | found |
 
 ---
 
@@ -67,4 +68,13 @@ Status values: **found** / **issue opened** / **PR opened** / **merged**.
 - **How to reproduce:** read the step; or make a test that counts failures (for example `test_nip49`) fail and push to a fork: the Windows job stays green. The latest upstream `main` run ([run 37258828793](https://github.com/privkeyio/libnostr-c/actions/runs/37258828793)) shows `100% tests passed out of 14` there, so it is not hiding a failure today, as far as `ctest` can tell (see #4).
 - **Proposed fix:** remove `|| echo "Tests completed with warnings"`. If some Windows tests are known to fail, mark those tests as expected failures or skips explicitly instead of masking the whole step.
 - **Platform:** Windows CI only.
+- **Status:** found. No matching upstream issue or PR.
+
+## 6. ESP-IDF smoke app only builds from a folder named libnostr-c
+
+- **What is wrong:** the smoke app finds the library with `EXTRA_COMPONENT_DIRS ../../`, i.e. the repository folder. ESP-IDF names a component after its folder, but `main` requires the fixed name `libnostr-c`. If the repository is cloned under any other folder name, configuration fails with `Failed to resolve component 'libnostr-c' required by component 'main': unknown name.` Upstream CI passes only because it checks the repository out into a folder named exactly `libnostr-c` (`.github/workflows/build.yml:175`).
+- **File and line:** `test/esp-idf/CMakeLists.txt:3` (`EXTRA_COMPONENT_DIRS`), `test/esp-idf/main/CMakeLists.txt:4` (`REQUIRES libnostr-c`). Both date from PR [#25](https://github.com/privkeyio/libnostr-c/pull/25).
+- **How to reproduce:** clone the repository into a folder with a different name (for example `git clone https://github.com/privkeyio/libnostr-c.git libnostr-c-test`), place `noscrypt` and `secp256k1-frost` next to it at the commits CI pins, then run `idf.py set-target esp32s3` in `test/esp-idf`. It fails with the error above.
+- **Proposed fix:** make the test app independent of the folder name, for example by deriving the component name from the folder in `test/esp-idf` (`get_filename_component(... NAME)` on the repository path, then `REQUIRES ${that_name}`), or by declaring the library as a local dependency of the test app in an `idf_component.yml`. To be confirmed with a test build from a differently named folder before proposing it. Test app only; the library itself is unaffected.
+- **Platform:** all (any checkout whose folder is not named `libnostr-c`). Seen on macOS with ESP-IDF 5.5.6, from this fork's `libnostr-c-esp32` folder.
 - **Status:** found. No matching upstream issue or PR.
