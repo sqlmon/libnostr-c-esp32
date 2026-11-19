@@ -36,7 +36,6 @@ valgrind --tool=memcheck --leak-check=full ./tests/test_runner
 - `test_bech32.c` - Bech32 encoding/decoding tests
 - `test_relay.c` - WebSocket relay communication tests
 - `test_zap.c` - Lightning zap functionality tests
-- `unity.h` - Minimal Unity test framework
 
 ## Coverage
 
