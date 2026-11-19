@@ -2,7 +2,7 @@ name: Build and Test
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, esp32-noscrypt-free ]
   pull_request:
     branches: [ main ]
     types: [ opened, synchronize, reopened, ready_for_review ]
