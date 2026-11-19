@@ -1,8 +1,8 @@
 # Baselines: M1 host builds, CI and M2 hardware
 
-**Summary:** Both Mac builds (secp256k1 + OpenSSL, and secp256k1 + mbedTLS) compile and `ctest` reports 15/15 passed, but the fallback test runner does not count failures, and one real failure (`test_zap_verify`) is hidden in both. On hardware (M2), the unchanged smoke app prints `SMOKE-PASS` on board A, and after its checks became Unity tests, a deliberately broken check is counted as a failure.
+**Summary:** Both Mac builds (secp256k1 + OpenSSL, and secp256k1 + mbedTLS) compile and `ctest` reports 15/15 passed, but the fallback test runner does not count failures, and one real failure (`test_zap_verify`) is hidden in both. On hardware (M2), the unchanged smoke app prints `SMOKE-PASS` on board A, and after its checks became Unity tests, a deliberately broken check is counted as a failure. With real Unity on the Mac (M2b), both builds run 359 checks with 0 failures, and the zap failure, once counted, is fixed.
 
-## Setup
+## M1 setup
 
 | Item | Value |
 |---|---|
@@ -19,7 +19,7 @@
 | Unity | not installed (fallback runner used, see below) |
 | utf8proc | not installed (optional; BIP-39 then rejects non-ASCII input) |
 
-## Commands
+## M1 commands
 
 Run from the repository root. Build folders sit under `build/`, which is git-ignored.
 
@@ -54,7 +54,7 @@ The `grep` prints `#define HAVE_MBEDTLS`; `otool` shows `libmbedcrypto.16.dylib 
 
 Without the two `-L/opt/homebrew/lib` flags, linking `libnostr.dylib` fails with `ld: library 'secp256k1' not found`, and configure warns that "secp256k1 lacks schnorrsig support" (false: the library has `secp256k1_schnorrsig_sign32`). Setting `-DSECP256K1_LIB_DIR=...` does not help, because that option is skipped when pkg-config already found secp256k1. Details in [UPSTREAM.md](UPSTREAM.md). Homebrew on Apple silicon installs into `/opt/homebrew/lib`, which the linker does not search by default; upstream's macOS CI builds secp256k1 into `/usr/local/lib`, which it does.
 
-## Results
+## M1 results
 
 | | Build 1 (OpenSSL) | Build 2 (mbedTLS) |
 |---|---|---|
@@ -89,7 +89,7 @@ Both builds print `Assertion failed: NOSTR_OK != err` just before `Success: test
 
 No skipped or failing lines mention signing, verifying or Schnorr. The `test_key.c` signing tests (sign, verify, rejecting a corrupted signature or ID) and the NIP-26 delegation verify tests printed no failures, but under this runner that is weaker evidence than it looks.
 
-## Other findings
+## M1 other findings
 
 - **Smoke app paths:** `test/esp-idf/CMakeLists.txt` expects `../../../noscrypt` and `../../../secp256k1-frost` next to the repository. Neither exists in this checkout's parent folder. To be handled in M2.
 - **macOS CI uses a different secp256k1 setup:** upstream's `build-macos` job runs the same 15 test programs (secp256k1 and noscrypt variants), but builds secp256k1 from source into `/usr/local/lib`, which the macOS linker searches by default. That is why CI never hits the linker problem above. (The `-DBUILD_TESTS=OFF` in that job belongs to the step that builds noscrypt, not libnostr-c.) Its `ctest --output-on-failure` prints nothing for programs it counts as passed, so a hidden failure would not show there.
@@ -193,3 +193,57 @@ idf.py -p <board A port> monitor
 - **Run 1:** one `PASS` line per test, `test_nostr_init` through `test_nostr_keypair_generate`. About 130 ms from `Calling app_main()` to the return. Unity adds about 2 KB to the app (0x3aeb0 before).
 - **Run 2:** in `test_nostr_keypair_generate`, the expected result was flipped (`TEST_ASSERT_NOT_EQUAL_INT(NOSTR_OK, rc)`). Tests 1–10 still printed `PASS`, and the broken test printed `test_main.c:163:test_nostr_keypair_generate:FAIL: Expected 0 to be not equal to 0`. The broken version was never committed.
 - **Run 3:** the file was compared byte for byte with a copy saved before the break (`cmp`: identical). Same app size and same ELF fingerprint as run 1, so the board is back on exactly the tested version.
+
+## M2b real test counts
+
+**Summary:** the Mac tests now use real Unity, so a failing check fails `ctest`. Counted for the first time, the hidden zap failure showed up as 1 failure; with its test data fixed, both builds pass 15/15 programs and 359 Unity checks with 0 failures.
+
+### Setup
+
+| Item | Value |
+|---|---|
+| Date | 2026-11-19 |
+| Code | `esp32-noscrypt-free` at `4e19e6c`: the zap data fix and the seven `fix-test-unity` commits cherry-picked onto `086dbc6` (see [UPSTREAM.md](UPSTREAM.md) #3, #4, #7) |
+| Unity | v2.6.0 (MIT), downloaded by CMake on first configure, pinned to commit `860062d51b2e8a75d150337b63ca2a472840d13c`, compiled from its single source as `nostr_unity` |
+| Everything else | as in M1 (same Homebrew versions, Debug builds, linker workaround) |
+
+### Commands
+
+Same as M1, in new build folders so the M1 logs stay as they were. Run from the repository root:
+
+```sh
+cmake --fresh -S . -B build/m2b-host -DCMAKE_BUILD_TYPE=Debug \
+  -DNOSTR_FEATURE_CRYPTO_NOSCRYPT=OFF \
+  -DCMAKE_SHARED_LINKER_FLAGS="-L/opt/homebrew/lib" \
+  -DCMAKE_EXE_LINKER_FLAGS="-L/opt/homebrew/lib"
+cmake --build build/m2b-host -j
+ctest --test-dir build/m2b-host -V > build/m2b-host/ctest-verbose.log 2>&1
+
+cmake --fresh -S . -B build/m2b-mbedtls -DCMAKE_BUILD_TYPE=Debug \
+  -DNOSTR_FEATURE_CRYPTO_NOSCRYPT=OFF -DNOSTR_CRYPTO_MBEDTLS=ON \
+  -DCMAKE_PREFIX_PATH="$(brew --prefix mbedtls@3)" \
+  -DCMAKE_SHARED_LINKER_FLAGS="-L/opt/homebrew/lib" \
+  -DCMAKE_EXE_LINKER_FLAGS="-L/opt/homebrew/lib"
+cmake --build build/m2b-mbedtls -j
+ctest --test-dir build/m2b-mbedtls -V > build/m2b-mbedtls/ctest-verbose.log 2>&1
+```
+
+To build only the library, with no Unity download, add `-DBUILD_TESTING=OFF`.
+
+### Results
+
+Identical in both builds (OpenSSL and mbedTLS 3.6.8), except where noted. The two middle rows ran on branch `fix-test-unity`, before the zap data fix was added:
+
+| Stage | `ctest` programs | Unity checks | Failures |
+|---|---|---|---|
+| M1, fallback runner | 15/15 "passed" | not counted | 1 hidden (`test_zap_verify`) |
+| Real Unity, zap data not yet fixed (`6b4ceb3`) | 14/15 | 359 | 1: `test_zap_verify: Expected 0 Was 2` |
+| One NIP-10 check deliberately broken, then undone (`651f747`, OpenSSL build only; 5 programs on Unity at that point) | 13/15 | 186 | 2: `nip10_tests` and `unit_tests` |
+| Real Unity and zap data fixed (`4e19e6c`) | **15/15** | **359** | **0** |
+
+- **Unity checks per program:** `unit_tests` 119, `relay_protocol_tests` 117, NIP-05 31, NIP-50 17, NIP-18 15, NIP-26 12, NIP-25 11, NIP-10 10, filter clone 10, NIP-49 7, random 6, thread safety 4. Each count matches the number of test functions its files define.
+- **Not on Unity:** NIP-51 (19 checks), NIP-65 (13) and relay integration (9) use their own check macros, which already count failures. All passed.
+- **The deliberate break** was in `tests/test_nip10.c`, which is built both on its own and into `test_runner`, so it failed two programs; it was undone and never committed.
+- **ESP32 build unaffected:** the smoke app still builds from `4e19e6c` for `esp32s3` at 0x3b640 bytes, the same as the M2 Unity run, with no Unity download (the ESP-IDF path of `CMakeLists.txt` returns before `tests/`).
+- **Warnings:** in our own code, still only `tests/test_thread_safety.c:156` from M1. Unity compiles without warnings.
+- **Left out:** the 9 test files no default build compiles, among them NIP-44 and NIP-59 (switched on in M5 and M8).
