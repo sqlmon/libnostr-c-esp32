@@ -263,6 +263,8 @@ make test
 ./tests/test_nip59
 ```
 
+The tests use [Unity](https://github.com/ThrowTheSwitch/Unity) v2.6.0, which CMake downloads automatically, pinned by commit, only when `BUILD_TESTING` is on (the default). The first configure needs internet access. To build only the library, with no download, pass `-DBUILD_TESTING=OFF`.
+
 ## Using in Your Project
 
 ### CMake

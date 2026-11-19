@@ -7,7 +7,7 @@
  * self-deadlock, an unsynchronised DRBG draw, and a length regression. Each
  * case below is a regression test for one of them.
  */
-#include "unity.h"
+#include "unity_fallback.h"
 #include "../include/nostr.h"
 #include <string.h>
 #include <stdlib.h>

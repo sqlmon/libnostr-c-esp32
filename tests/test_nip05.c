@@ -2,7 +2,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include "../include/nostr.h"
-#include "unity.h"
+#include "unity_fallback.h"
 
 #define TEST_PUBKEY "b0635d6a9851d3aed0cd6c495b282167acf761729078d975fc341b22650b07b9"
 

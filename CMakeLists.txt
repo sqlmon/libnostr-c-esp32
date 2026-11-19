@@ -960,6 +960,8 @@ set_target_properties(nostr_static PROPERTIES
     OUTPUT_NAME nostr
 )
 
+# The tests use Unity, which tests/CMakeLists.txt downloads on first configure.
+# Turn this off to build only the library, with no download.
 option(BUILD_TESTING "Build the test suite" ON)
 if(BUILD_TESTING)
     enable_testing()

@@ -17,6 +17,8 @@ make
 ./tests/test_runner
 ```
 
+The tests use [Unity](https://github.com/ThrowTheSwitch/Unity) v2.6.0 (MIT). CMake downloads it automatically, pinned by commit, only when the tests are being built (`BUILD_TESTING`, on by default). The first configure therefore needs internet access; later builds reuse the copy in the build folder. To build only the library, with no download, pass `-DBUILD_TESTING=OFF`.
+
 ### Memory Leak Testing
 ```bash
 # Install valgrind first

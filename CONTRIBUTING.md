@@ -89,6 +89,8 @@ ctest --verbose
 valgrind --leak-check=full ./tests/test_runner
 ```
 
+The tests use [Unity](https://github.com/ThrowTheSwitch/Unity) v2.6.0, which CMake downloads automatically, pinned by commit, only when the tests are being built (`BUILD_TESTING`, on by default). The first configure needs internet access. To build only the library, with no download, pass `-DBUILD_TESTING=OFF`.
+
 ## Security
 
 - Validate all inputs

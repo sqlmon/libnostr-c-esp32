@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <nostr.h>
 #include <nostr_features.h>
-#include "unity.h"
+#include "unity_fallback.h"
 
 // Event tests
 void test_event_create_destroy(void);

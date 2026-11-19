@@ -2,7 +2,7 @@
 #include <string.h>
 #include <stdint.h>
 #include "../include/nostr.h"
-#include "unity.h"
+#include "unity_fallback.h"
 
 static void test_uri_parse_npub(void) {
     nostr_uri uri;

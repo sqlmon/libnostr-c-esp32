@@ -1,11 +1,18 @@
-find_package(PkgConfig QUIET)
-if(PkgConfig_FOUND)
-    pkg_check_modules(UNITY unity)
-endif()
-
-if(NOT UNITY_FOUND)
-    message(WARNING "Unity test framework not found, creating minimal test runner")
-endif()
+# Unity (MIT), pinned by commit like every other third-party source CI builds.
+include(FetchContent)
+FetchContent_Declare(unity
+    GIT_REPOSITORY https://github.com/ThrowTheSwitch/Unity.git
+    GIT_TAG 860062d51b2e8a75d150337b63ca2a472840d13c # v2.6.0
+    # Download only. Unity's own CMakeLists.txt adds install rules, which would
+    # make `cmake --install` ship Unity alongside libnostr-c, so point
+    # FetchContent at a folder without one and build the single source here.
+    # (SOURCE_SUBDIR needs CMake 3.18; older versions add Unity's own project,
+    # whose target is named "unity", hence the different name below.)
+    SOURCE_SUBDIR no-cmake
+)
+FetchContent_MakeAvailable(unity)
+add_library(nostr_unity STATIC ${unity_SOURCE_DIR}/src/unity.c)
+target_include_directories(nostr_unity PUBLIC ${unity_SOURCE_DIR}/src)
 
 add_executable(test_runner
     test_event.c
@@ -163,10 +170,5 @@ endif()
 
 target_link_libraries(test_runner nostr_static)
 target_compile_definitions(test_runner PRIVATE TEST_RUNNER_INCLUDED)
-if(UNITY_FOUND)
-    target_link_libraries(test_runner ${UNITY_LIBRARIES})
-    target_include_directories(test_runner PRIVATE ${UNITY_INCLUDE_DIRS})
-    target_compile_options(test_runner PRIVATE ${UNITY_CFLAGS_OTHER})
-endif()
 
 add_test(NAME unit_tests COMMAND test_runner)
