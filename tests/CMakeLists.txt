@@ -149,7 +149,7 @@ endif()
 # unsynchronised DRBG draw.
 find_package(Threads REQUIRED)
 add_executable(test_random test_random.c)
-target_link_libraries(test_random nostr_static Threads::Threads)
+target_link_libraries(test_random nostr_static nostr_unity Threads::Threads)
 add_test(NAME random_tests COMMAND test_random)
 # The deadlock case would hang rather than fail if that bug returned, and
 # ctest's default timeout is 1500s. Cap it so a regression reports quickly.
@@ -163,7 +163,7 @@ set_tests_properties(random_tests PROPERTIES TIMEOUT 120)
 # its concurrency case still runs on Windows; porting this one is left separate.
 if(NOT WIN32)
     add_executable(test_thread_safety test_thread_safety.c)
-    target_link_libraries(test_thread_safety nostr_static Threads::Threads)
+    target_link_libraries(test_thread_safety nostr_static nostr_unity Threads::Threads)
     add_test(NAME thread_safety_tests COMMAND test_thread_safety)
     set_tests_properties(thread_safety_tests PROPERTIES TIMEOUT 180)
 endif()
