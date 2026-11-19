@@ -56,7 +56,7 @@ endif()
 
 if(NOSTR_FEATURE_NIP26 AND HAVE_CRYPTO_BACKEND)
     add_executable(test_nip26 test_nip26.c)
-    target_link_libraries(test_nip26 nostr_static)
+    target_link_libraries(test_nip26 nostr_static nostr_unity)
     add_test(NAME nip26_tests COMMAND test_nip26)
 endif()
 
@@ -80,7 +80,7 @@ endif()
 
 if(NOSTR_FEATURE_NIP49)
     add_executable(test_nip49 test_nip49.c)
-    target_link_libraries(test_nip49 nostr_static)
+    target_link_libraries(test_nip49 nostr_static nostr_unity)
     add_test(NAME nip49_tests COMMAND test_nip49)
 endif()
 
@@ -127,7 +127,7 @@ if(NOSTR_FEATURE_RELAY_PROTOCOL)
         test_relay_protocol_accessors.c
     )
     target_compile_definitions(test_relay_protocol PRIVATE TEST_RUNNER_INCLUDED)
-    target_link_libraries(test_relay_protocol nostr_static)
+    target_link_libraries(test_relay_protocol nostr_static nostr_unity)
     add_test(NAME relay_protocol_tests COMMAND test_relay_protocol)
 
     add_executable(test_relay_integration test_relay_integration.c)
@@ -135,11 +135,11 @@ if(NOSTR_FEATURE_RELAY_PROTOCOL)
     add_test(NAME relay_integration_tests COMMAND test_relay_integration)
 
     add_executable(test_filter_clone test_filter_clone.c)
-    target_link_libraries(test_filter_clone nostr_static)
+    target_link_libraries(test_filter_clone nostr_static nostr_unity)
     add_test(NAME filter_clone_tests COMMAND test_filter_clone)
 
     add_executable(test_nip50 test_nip50.c)
-    target_link_libraries(test_nip50 nostr_static)
+    target_link_libraries(test_nip50 nostr_static nostr_unity)
     add_test(NAME nip50_tests COMMAND test_nip50)
 endif()
 
