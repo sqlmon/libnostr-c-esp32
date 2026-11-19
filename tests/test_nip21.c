@@ -260,6 +260,4 @@ void run_nip21_tests(void) {
     RUN_TEST(test_uri_parse_nprofile);
     RUN_TEST(test_uri_invalid_scheme);
     RUN_TEST(test_uri_null_params);
-
-    printf("   NIP-21 tests completed\n");
 }

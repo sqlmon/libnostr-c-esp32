@@ -315,8 +315,6 @@ void run_nip05_tests(void) {
     RUN_TEST(test_nip05_parse_response_invalid_relay_url);
     RUN_TEST(test_nip05_parse_response_json_injection);
     RUN_TEST(test_nip05_parse_response_ws_relay);
-
-    printf("   NIP-05 tests completed\n");
 }
 
 #ifndef TEST_RUNNER_INCLUDED
