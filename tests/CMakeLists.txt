@@ -32,25 +32,25 @@ add_executable(test_runner
 # Conditionally build tests based on enabled features
 if(NOSTR_FEATURE_NIP05)
     add_executable(test_nip05 test_nip05.c)
-    target_link_libraries(test_nip05 nostr_static)
+    target_link_libraries(test_nip05 nostr_static nostr_unity)
     add_test(NAME nip05_tests COMMAND test_nip05)
 endif()
 
 if(NOSTR_FEATURE_NIP10)
     add_executable(test_nip10 test_nip10.c)
-    target_link_libraries(test_nip10 nostr_static)
+    target_link_libraries(test_nip10 nostr_static nostr_unity)
     add_test(NAME nip10_tests COMMAND test_nip10)
 endif()
 
 if(NOSTR_FEATURE_NIP18)
     add_executable(test_nip18 test_nip18.c)
-    target_link_libraries(test_nip18 nostr_static)
+    target_link_libraries(test_nip18 nostr_static nostr_unity)
     add_test(NAME nip18_tests COMMAND test_nip18)
 endif()
 
 if(NOSTR_FEATURE_NIP25)
     add_executable(test_nip25 test_nip25.c)
-    target_link_libraries(test_nip25 nostr_static)
+    target_link_libraries(test_nip25 nostr_static nostr_unity)
     add_test(NAME nip25_tests COMMAND test_nip25)
 endif()
 
@@ -168,7 +168,7 @@ if(NOT WIN32)
     set_tests_properties(thread_safety_tests PROPERTIES TIMEOUT 180)
 endif()
 
-target_link_libraries(test_runner nostr_static)
+target_link_libraries(test_runner nostr_static nostr_unity)
 target_compile_definitions(test_runner PRIVATE TEST_RUNNER_INCLUDED)
 
 add_test(NAME unit_tests COMMAND test_runner)

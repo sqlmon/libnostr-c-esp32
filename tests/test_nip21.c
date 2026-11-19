@@ -2,7 +2,7 @@
 #include <string.h>
 #include <stdint.h>
 #include "../include/nostr.h"
-#include "unity_fallback.h"
+#include "unity.h"
 
 static void test_uri_parse_npub(void) {
     nostr_uri uri;
@@ -246,8 +246,6 @@ static void test_uri_null_params(void) {
 void run_nip21_tests(void) {
     printf("   Running NIP-21 URI scheme tests...\n");
 
-    UNITY_BEGIN();
-
     RUN_TEST(test_uri_parse_npub);
     RUN_TEST(test_uri_parse_nsec);
     RUN_TEST(test_uri_parse_note);
@@ -262,8 +260,6 @@ void run_nip21_tests(void) {
     RUN_TEST(test_uri_parse_nprofile);
     RUN_TEST(test_uri_invalid_scheme);
     RUN_TEST(test_uri_null_params);
-
-    UNITY_END();
 
     printf("   NIP-21 tests completed\n");
 }

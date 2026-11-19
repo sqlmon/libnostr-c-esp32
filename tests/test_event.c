@@ -1,66 +1,9 @@
-#ifdef HAVE_UNITY
 #include "unity.h"
-#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include "../include/nostr.h"
-
-#ifndef HAVE_UNITY
-#define TEST_ASSERT_EQUAL(expected, actual) \
-    do { \
-        if ((expected) != (actual)) { \
-            printf("Assertion failed: %s != %s\n", #expected, #actual); \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_NOT_NULL(ptr) \
-    do { \
-        if ((ptr) == NULL) { \
-            printf("Pointer is NULL: %s\n", #ptr); \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_NULL(ptr) \
-    do { \
-        if ((ptr) != NULL) { \
-            printf("Pointer is not NULL: %s\n", #ptr); \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_TRUE(condition) \
-    do { \
-        if (!(condition)) { \
-            printf("Condition failed: %s\n", #condition); \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_EQUAL_STRING(expected, actual) \
-    do { \
-        if (strcmp(expected, actual) != 0) { \
-            printf("String comparison failed: %s != %s\n", expected, actual); \
-            return; \
-        } \
-    } while(0)
-
-#define TEST_ASSERT_NOT_EQUAL(expected, actual) \
-    do { \
-        if ((expected) == (actual)) { \
-            printf("Values should not be equal: %s == %s\n", #expected, #actual); \
-            return; \
-        } \
-    } while(0)
-#endif
-
-#ifdef HAVE_UNITY
-void setUp(void) {}
-void tearDown(void) {}
-#endif
 
 void test_event_create_destroy(void)
 {
@@ -245,33 +188,14 @@ void test_event_from_json_invalid(void)
 
 void run_event_tests(void)
 {
-    test_event_create_destroy();
-    printf("  Success: Event create/destroy\n");
-    
-    test_event_create_invalid_param();
-    printf("  Success: Event create invalid params\n");
-    
-    test_event_set_content();
-    printf("  Success: Event set content\n");
-    
-    test_event_set_content_invalid_params();
-    printf("  Success: Event set content invalid params\n");
-    
-    test_event_add_tag();
-    printf("  Success: Event add tag\n");
-    
-    test_event_add_tag_invalid_params();
-    printf("  Success: Event add tag invalid params\n");
-    
-    test_event_compute_id();
-    printf("  Success: Event compute ID\n");
-    
-    test_event_to_json();
-    printf("  Success: Event to JSON\n");
-    
-    test_event_from_json();
-    printf("  Success: Event from JSON\n");
-    
-    test_event_from_json_invalid();
-    printf("  Success: Event from JSON invalid\n");
+    RUN_TEST(test_event_create_destroy);
+    RUN_TEST(test_event_create_invalid_param);
+    RUN_TEST(test_event_set_content);
+    RUN_TEST(test_event_set_content_invalid_params);
+    RUN_TEST(test_event_add_tag);
+    RUN_TEST(test_event_add_tag_invalid_params);
+    RUN_TEST(test_event_compute_id);
+    RUN_TEST(test_event_to_json);
+    RUN_TEST(test_event_from_json);
+    RUN_TEST(test_event_from_json_invalid);
 }
