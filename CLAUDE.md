@@ -14,6 +14,7 @@ Personal working style, board details and the Mac environment live in `~/project
 - **Follow the existing code style** and structure of libnostr-c (naming, error codes, `#ifdef` backends).
 - **No secrets** in the repository. It is public.
 - **Upstream etiquette:** keep `main` identical to `upstream/main`. Work on `esp32-noscrypt-free`. Never push to `upstream`. Changes intended for upstream are kept small and separate.
+- **When you find a bug in the original libnostr-c code**, add it to `docs/esp32/UPSTREAM.md` the same day, and tell me. Fixes meant for upstream are made on their own branch from `upstream/main`, one fix per branch, with a test that fails before the fix and passes after.
 
 ## Environment
 
@@ -34,11 +35,11 @@ Both boards are plugged into the Mac at once, each on its own serial port: board
 
 ## Known facts about the original code
 
-**Verify these against the current code at the start of M1.** They were read from an earlier copy of the files, and the README says the ESP32 build uses mbedTLS, which may or may not conflict with the first point.
+**Checked against upstream `e07af71` during M1** (see `docs/esp32/BASELINE.md`).
 
-- **Existing test setup:** `tests/` holds about 35 Unity test files run by `ctest`. `test/esp-idf/` is a small ESP-IDF smoke-test app that prints `SMOKE-PASS`. GitHub Actions (`.github/workflows/build.yml`) already has a `build-mbedtls` job and a `build-esp-idf` job that builds the smoke app for esp32s3 and runs it in QEMU (ESP-IDF v5.4.1). Extend these rather than creating new ones.
+- **Existing test setup:** `tests/` holds 35 test files; by default 26 are compiled into 15 test programs that `ctest` runs. Unity is not used: the tests fall back to their own checker, which doesn't count failures, so "passed" only means "didn't crash" (see `docs/esp32/BASELINE.md`). `test/esp-idf/` is a small ESP-IDF smoke-test app that prints `SMOKE-PASS`. GitHub Actions (`.github/workflows/build.yml`) already has a `build-mbedtls` job and a `build-esp-idf` job that builds the smoke app for esp32s3 and runs it in QEMU (ESP-IDF v5.4.1). Extend these rather than creating new ones.
 - **Style:** follow the actual code and commit history where `CONTRIBUTING.md` disagrees (type names without `_t`, plain-sentence commit messages).
-- **Stack:** call `nostr_init()` early, from a task with at least 4 KB of stack; the first random-number draw needs about 500 bytes extra.
+- **Stack:** call `nostr_init()` early, from a task with at least 4 KB of stack. The first random-number draw seeds the generator, and that needs extra stack: upstream measured it under QEMU on ESP32-S3 (`README.md`, "ESP-IDF stack requirement"), where a 2 KB task that seeds crashes and a 3 KB task passes, so the limit is between 2 and 3 KB. 4 KB is recommended for margin. Not yet measured on our boards.
 - In the ESP32 build recipe (the `if(ESP_PLATFORM)` block of `CMakeLists.txt`), noscrypt is hard-wired: `REQUIRES ... noscrypt` and `HAVE_NOSCRYPT 1`. There is no switch to remove it yet.
 - `src/key.c` and `src/event.c` already contain complete `#elif defined(HAVE_SECP256K1)` paths for key generation, key agreement, signing and verifying.
 - **Bug:** the secp256k1 path of `nostr_key_ecdh` calls `secp256k1_ecdh(..., NULL, NULL)`, which hashes the shared point with SHA-256. NIP-44 requires the **unhashed x-coordinate**. Fix with a custom hash function, proven by the NIP-44 conversation-key test vectors.
@@ -50,15 +51,16 @@ Both boards are plugged into the Mac at once, each on its own serial port: board
 
 1. **M1** Baseline: verify the known facts above, build on the Mac as-is (noscrypt off), run the existing tests, record results.
 2. **M2** Run the existing `test/esp-idf` smoke app on board A (`SMOKE-PASS`), then extend it with Unity tests.
-3. **M3** Noscrypt-free ESP32 build (secp256k1 for keys and signing). BIP-340 test vectors and a known Nostr event pass on Mac and board A.
-4. **M4** Key-agreement fix (raw x-coordinate). NIP-44 conversation-key vectors pass.
-5. **M5** NIP-44 core on mbedTLS. All NIP-44 vectors pass, including invalid ones that must fail.
-6. **M6** Independent review of M3–M5 by a separate session that has not seen the work.
-7. **M7** Relay client (secure WebSockets, subscribe, publish, reconnect). Board A → relay → board B.
-8. **M8** NIP-59 gift wrap / unwrap. Board A sends, board B opens; tampered wraps rejected.
-9. **M9** Interoperability with nostr-tools (Node.js script on the Mac), both directions.
-10. **M10** Measure memory, flash and timing; NVS key storage; overnight stability run on both boards.
-11. **M11** Example project and ESP32 README section, including the entropy warning and a "not independently audited" note.
+3. **M2b** Real test counts: switch the Mac tests to real Unity (v2.6.0, downloaded by CMake, pinned by commit) so failing checks count; a deliberately broken check must make ctest fail.
+4. **M3** Noscrypt-free ESP32 build (secp256k1 for keys and signing). BIP-340 test vectors and a known Nostr event pass on Mac and board A.
+5. **M4** Key-agreement fix (raw x-coordinate). NIP-44 conversation-key vectors pass.
+6. **M5** NIP-44 core on mbedTLS. All NIP-44 vectors pass, including invalid ones that must fail.
+7. **M6** Independent review of M3–M5 by a separate session that has not seen the work.
+8. **M7** Relay client (secure WebSockets, subscribe, publish, reconnect). Board A → relay → board B.
+9. **M8** NIP-59 gift wrap / unwrap. Board A sends, board B opens; tampered wraps rejected.
+10. **M9** Interoperability with nostr-tools (Node.js script on the Mac), both directions.
+11. **M10** Measure memory, flash and timing; NVS key storage; overnight stability run on both boards.
+12. **M11** Example project and ESP32 README section, including the entropy warning and a "not independently audited" note.
 
 Right after M3, extend the existing `build.yml` workflow: make the `build-mbedtls` job run the new test vectors, and add an ESP-IDF v5.5.6 build alongside the existing v5.4.1 one. Never merge with a red check.
 
