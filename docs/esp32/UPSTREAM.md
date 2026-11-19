@@ -4,7 +4,7 @@ One entry per bug in upstream [privkeyio/libnostr-c](https://github.com/privkeyi
 
 Each fix meant for upstream gets its own branch from `upstream/main`, one fix per branch, with a test that fails before the fix and passes after.
 
-Status values: **found** / **issue opened** / **PR opened** / **merged**.
+Status values: **found** / **fix ready** (committed on a local branch from `upstream/main`, not yet pushed or proposed) / **issue opened** / **PR opened** / **merged**.
 
 | # | Title | Status |
 |---|---|---|
@@ -13,7 +13,7 @@ Status values: **found** / **issue opened** / **PR opened** / **merged**.
 | 3 | [test_zap_verify uses inconsistent test data](#3-test_zap_verify-uses-inconsistent-test-data) | found |
 | 4 | [Fallback test runner does not count failures](#4-fallback-test-runner-does-not-count-failures) | found |
 | 5 | [Windows CI ignores test failures](#5-windows-ci-ignores-test-failures) | found |
-| 6 | [ESP-IDF smoke app only builds from a folder named libnostr-c](#6-esp-idf-smoke-app-only-builds-from-a-folder-named-libnostr-c) | found |
+| 6 | [ESP-IDF smoke app only builds from a folder named libnostr-c](#6-esp-idf-smoke-app-only-builds-from-a-folder-named-libnostr-c) | fix ready |
 
 ---
 
@@ -75,6 +75,7 @@ Status values: **found** / **issue opened** / **PR opened** / **merged**.
 - **What is wrong:** the smoke app finds the library with `EXTRA_COMPONENT_DIRS ../../`, i.e. the repository folder. ESP-IDF names a component after its folder, but `main` requires the fixed name `libnostr-c`. If the repository is cloned under any other folder name, configuration fails with `Failed to resolve component 'libnostr-c' required by component 'main': unknown name.` Upstream CI passes only because it checks the repository out into a folder named exactly `libnostr-c` (`.github/workflows/build.yml:175`).
 - **File and line:** `test/esp-idf/CMakeLists.txt:3` (`EXTRA_COMPONENT_DIRS`), `test/esp-idf/main/CMakeLists.txt:4` (`REQUIRES libnostr-c`). Both date from PR [#25](https://github.com/privkeyio/libnostr-c/pull/25).
 - **How to reproduce:** clone the repository into a folder with a different name (for example `git clone https://github.com/privkeyio/libnostr-c.git libnostr-c-test`), place `noscrypt` and `secp256k1-frost` next to it at the commits CI pins, then run `idf.py set-target esp32s3` in `test/esp-idf`. It fails with the error above.
-- **Proposed fix:** make the test app independent of the folder name, for example by deriving the component name from the folder in `test/esp-idf` (`get_filename_component(... NAME)` on the repository path, then `REQUIRES ${that_name}`), or by declaring the library as a local dependency of the test app in an `idf_component.yml`. To be confirmed with a test build from a differently named folder before proposing it. Test app only; the library itself is unaffected.
+- **Fix:** `test/esp-idf/main/CMakeLists.txt` now derives the component name the way ESP-IDF does (`get_filename_component(... ABSOLUTE)` on `${COMPONENT_DIR}/../../..`, then `NAME`; compare `tools/cmake/component.cmake:152–158` in ESP-IDF 5.5.6) and passes it to `REQUIRES`. Three lines of CMake plus a comment, test app only; the library, CI and the folder layout are unchanged. An `idf_component.yml` local dependency was considered and not used, because it adds a file and brings in the component manager's naming.
+- **Proof (2026-11-19, ESP-IDF 5.5.6, target `esp32s3`):** before the fix, `idf.py set-target esp32s3` from a folder named `libnostr-c-esp32` failed with the error above. After it, the smoke app builds from that folder (component registered as `libnostr-c-esp32`) and from a folder named `libnostr-c` (CI's layout); both produce the same 0x3aeb0-byte app. The `libnostr-c-esp32` build prints `SMOKE-PASS` (11/11) on board A.
 - **Platform:** all (any checkout whose folder is not named `libnostr-c`). Seen on macOS with ESP-IDF 5.5.6, from this fork's `libnostr-c-esp32` folder.
-- **Status:** found. No matching upstream issue or PR.
+- **Status:** fix ready. Commit `283a962` on local branch `fix-esp-idf-component-name` (from `upstream/main` `e07af71`, one commit, not pushed, no PR); cherry-picked onto `esp32-noscrypt-free` as `587915b`. No matching upstream issue or PR.
