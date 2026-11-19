@@ -1,6 +1,6 @@
-# M1 baseline: host build without noscrypt
+# Baselines: M1 host builds, CI and M2 hardware
 
-**Summary:** Both Mac builds (secp256k1 + OpenSSL, and secp256k1 + mbedTLS) compile and `ctest` reports 15/15 passed, but the fallback test runner does not count failures, and one real failure (`test_zap_verify`) is hidden in both. On hardware (M2), the unchanged smoke app prints `SMOKE-PASS` on board A.
+**Summary:** Both Mac builds (secp256k1 + OpenSSL, and secp256k1 + mbedTLS) compile and `ctest` reports 15/15 passed, but the fallback test runner does not count failures, and one real failure (`test_zap_verify`) is hidden in both. On hardware (M2), the unchanged smoke app prints `SMOKE-PASS` on board A, and after its checks became Unity tests, a deliberately broken check is counted as a failure.
 
 ## Setup
 
@@ -154,3 +154,42 @@ Find board A's port by matching the MAC printed by `esptool.py --port <port> chi
 - **PSRAM not enabled:** the boot log lists only internal RAM (326 + 21 + 32 + 7 KiB), because the default configuration does not turn PSRAM on.
 - **Not random-safe keys:** Wi-Fi and Bluetooth are off, so `nostr_keypair_generate` draws from a pseudo-random source (see the entropy note in `CLAUDE.md`). The test key is destroyed immediately.
 - **Still uses noscrypt:** this is the baseline before M3 removes it from the ESP32 build.
+
+## M2 Unity tests
+
+**Summary:** the 11 smoke checks now run as Unity tests, and board A prints Unity's summary before `SMOKE-PASS`. A deliberately broken check was counted as 1 failure and turned the result into `SMOKE-FAIL-TOTAL 1`.
+
+### Setup
+
+| Item | Value |
+|---|---|
+| Date | 2026-11-19 |
+| Code | `415490d`, built from the `libnostr-c-esp32` folder (no worktree, since the folder-name fix `587915b`). App version `v0.2.2-9-g7e49d80-dirty`: the build ran just before the commit, so it was stamped with the parent commit plus uncommitted changes. The built code is identical to `415490d` |
+| Unity | v2.6.0, the copy bundled with ESP-IDF v5.5.6 (`components/unity`), MIT. Nothing downloaded |
+| Everything else | as in the M2 hardware baseline above (ESP-IDF v5.5.6, esptool 4.13.0, same noscrypt and secp256k1-frost commits, board A) |
+
+The tests are called with Unity's plain `UNITY_BEGIN` / `RUN_TEST` / `UNITY_END`, not ESP-IDF's interactive test menu, which waits for keyboard input and would make the CI run time out. CI's `build-esp-idf` job only checks the log for `SMOKE-PASS`, so it needs no change. The app still prints `SMOKE-BEGIN` first and `SMOKE-PASS` or `SMOKE-FAIL-TOTAL N` last.
+
+### Commands
+
+In a terminal with ESP-IDF activated (`get_idf`):
+
+```sh
+cd ~/projects/libnostr-c-esp32/test/esp-idf
+idf.py build
+esptool.py --port <board A port> chip_id
+idf.py -p <board A port> flash
+idf.py -p <board A port> monitor
+```
+
+### Results
+
+| Run | App size | ELF fingerprint (start) | Unity summary | Last line |
+|---|---|---|---|---|
+| 1. Unity version | 0x3b640 bytes | `de73f926a` | `11 Tests 0 Failures 0 Ignored`, `OK` | `SMOKE-PASS` |
+| 2. One check deliberately broken | 0x3b760 bytes | `b4ce8e309` | `11 Tests 1 Failures 0 Ignored`, `FAIL` | `SMOKE-FAIL-TOTAL 1` |
+| 3. After undoing the break | 0x3b640 bytes | `de73f926a` | `11 Tests 0 Failures 0 Ignored`, `OK` | `SMOKE-PASS` |
+
+- **Run 1:** one `PASS` line per test, `test_nostr_init` through `test_nostr_keypair_generate`. About 130 ms from `Calling app_main()` to the return. Unity adds about 2 KB to the app (0x3aeb0 before).
+- **Run 2:** in `test_nostr_keypair_generate`, the expected result was flipped (`TEST_ASSERT_NOT_EQUAL_INT(NOSTR_OK, rc)`). Tests 1–10 still printed `PASS`, and the broken test printed `test_main.c:163:test_nostr_keypair_generate:FAIL: Expected 0 to be not equal to 0`. The broken version was never committed.
+- **Run 3:** the file was compared byte for byte with a copy saved before the break (`cmp`: identical). Same app size and same ELF fingerprint as run 1, so the board is back on exactly the tested version.
