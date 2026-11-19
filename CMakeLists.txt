@@ -960,8 +960,11 @@ set_target_properties(nostr_static PROPERTIES
     OUTPUT_NAME nostr
 )
 
-enable_testing()
-add_subdirectory(tests)
+option(BUILD_TESTING "Build the test suite" ON)
+if(BUILD_TESTING)
+    enable_testing()
+    add_subdirectory(tests)
+endif()
 add_subdirectory(examples)
 add_subdirectory(benchmark)
 
