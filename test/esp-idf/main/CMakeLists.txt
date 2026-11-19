@@ -7,5 +7,5 @@ get_filename_component(nostr_component "${nostr_dir}" NAME)
 idf_component_register(
     SRCS "test_main.c"
     INCLUDE_DIRS "."
-    REQUIRES ${nostr_component}
+    REQUIRES ${nostr_component} unity
 )
