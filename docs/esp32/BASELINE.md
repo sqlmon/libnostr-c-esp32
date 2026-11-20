@@ -254,4 +254,11 @@ On `4487bc8` (this fork's Actions runs 44643270900 and 44643270660), 11 of 12 jo
 
 - **Green:** the "CI" job (15/15; `unit_tests` 119 Tests 0 Failures; valgrind 0 errors; the zap `Assertion failed` line is gone), `build-esp-idf` in QEMU (`11 Tests 0 Failures`, `OK`, `SMOKE-PASS`), and all nine Linux and macOS jobs (15/15 each).
 - **Red, `build-windows`:** 13/14 programs; `unit_tests` `114 Tests 5 Failures`. The Windows preset builds without cJSON, and five tests were never written for that case: three event tests expect the wrong error code, and two zap tests need JSON. The fallback runner had hidden them. Logged as [UPSTREAM.md](UPSTREAM.md) #9; the step's `|| echo` did not mask the failure, which corrected #5.
-- **Fix:** `31e453d` (from `fix-tests-without-cjson`). Reproduced on macOS with `-DNOSTR_FEATURE_JSON_ENHANCED=OFF -DNOSTR_FEATURE_RELAY=OFF` in `build/m2b-nocjson`: `114 Tests 5 Failures` before, `114 Tests 0 Failures 2 Ignored` after. The two normal Mac builds stay at 15/15 and 359 tests, 0 failures. CI on `31e453d` and later: to be recorded after the next push.
+- **Fix:** `31e453d` (from `fix-tests-without-cjson`). Reproduced on macOS with `-DNOSTR_FEATURE_JSON_ENHANCED=OFF -DNOSTR_FEATURE_RELAY=OFF` in `build/m2b-nocjson`: `114 Tests 5 Failures` before, `114 Tests 0 Failures 2 Ignored` after. The two normal Mac builds stay at 15/15 and 359 tests, 0 failures.
+
+On `3ccf02d` (runs 44660359761 and 44660359716, which include `31e453d`), all 12 jobs green:
+
+- the "CI" job: 15/15; `unit_tests` 119 Tests 0 Failures 0 Ignored; valgrind 0 errors;
+- `build-esp-idf` in QEMU: `11 Tests 0 Failures 0 Ignored`, `SMOKE-PASS`;
+- all nine Linux and macOS jobs: 15/15 each;
+- `build-windows`: 14/14. ctest shows a program's Unity summary only when it fails, so the two ignored zap tests are not in the log.
