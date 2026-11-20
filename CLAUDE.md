@@ -16,6 +16,16 @@ Personal working style, board details and the Mac environment live in `~/project
 - **Upstream etiquette:** keep `main` identical to `upstream/main`. Work on `esp32-noscrypt-free`. Never push to `upstream`. Changes intended for upstream are kept small and separate.
 - **When you find a bug in the original libnostr-c code**, add it to `docs/esp32/UPSTREAM.md` the same day, and tell me. Fixes meant for upstream are made on their own branch from `upstream/main`, one fix per branch, with a test that fails before the fix and passes after.
 
+## Contribution policy
+
+- **Fixes to existing upstream code:** on their own branch from `upstream/main`, one fix per branch, then cherry-picked onto `esp32-noscrypt-free`. Logged in `docs/esp32/UPSTREAM.md` and offered upstream.
+- **Exception, stacked fixes:** if a fix only makes sense on top of another unmerged fix branch, base it on that branch, note the dependency in `UPSTREAM.md`, and offer them together in order.
+- **New features upstream has said it wants** (check issue #75 and any later replies): built the same way, as separate branches, and offered.
+- **New features for this fork's goals:** built directly on `esp32-noscrypt-free`. Not prepared for upstream unless the maintainer asks.
+- **Fork-only files** (`CLAUDE.md`, `docs/esp32/`, the CI trigger for this branch): never offered upstream.
+- **Upstream issues are short:** the problem, the key evidence and the questions, in a few lines each. Details go in the pull request descriptions.
+- **Periodically sync `main` with upstream** and merge it into `esp32-noscrypt-free`, so the fork doesn't drift.
+
 ## Environment
 
 - macOS, ESP-IDF **v5.5.6**, target **esp32s3**. ESP-IDF must be activated in the terminal before `idf.py` works.
