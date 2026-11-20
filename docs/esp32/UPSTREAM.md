@@ -10,13 +10,13 @@ Status values: **found** / **fix ready** (committed on a local branch from `upst
 |---|---|---|
 | 1 | [secp256k1 ECDH returns a hashed shared secret](#1-secp256k1-ecdh-returns-a-hashed-shared-secret) | issue opened |
 | 2 | [SECP256K1_LIB_DIR ignored when pkg-config finds secp256k1](#2-secp256k1_lib_dir-ignored-when-pkg-config-finds-secp256k1) | found |
-| 3 | [test_zap_verify uses inconsistent test data](#3-test_zap_verify-uses-inconsistent-test-data) | fix ready |
-| 4 | [Fallback test runner does not count failures](#4-fallback-test-runner-does-not-count-failures) | fix ready |
+| 3 | [test_zap_verify uses inconsistent test data](#3-test_zap_verify-uses-inconsistent-test-data) | issue opened |
+| 4 | [Fallback test runner does not count failures](#4-fallback-test-runner-does-not-count-failures) | issue opened |
 | 5 | [Windows CI test step prints a misleading message on failure](#5-windows-ci-test-step-prints-a-misleading-message-on-failure) | found (cosmetic) |
 | 6 | [ESP-IDF smoke app only builds from a folder named libnostr-c](#6-esp-idf-smoke-app-only-builds-from-a-folder-named-libnostr-c) | fix ready |
-| 7 | [BUILD_TESTS and BUILD_EXAMPLES are documented but do not exist](#7-build_tests-and-build_examples-are-documented-but-do-not-exist) | fix ready (tests switch only) |
+| 7 | [BUILD_TESTS and BUILD_EXAMPLES are documented but do not exist](#7-build_tests-and-build_examples-are-documented-but-do-not-exist) | issue opened (tests switch only) |
 | 8 | [cmake --install ships the header template, not the generated header](#8-cmake---install-ships-the-header-template-not-the-generated-header) | found |
-| 9 | [Event and zap tests fail in builds without cJSON](#9-event-and-zap-tests-fail-in-builds-without-cjson) | fix ready (stacked on #4) |
+| 9 | [Event and zap tests fail in builds without cJSON](#9-event-and-zap-tests-fail-in-builds-without-cjson) | issue opened (stacked on #4) |
 
 ---
 
@@ -50,7 +50,7 @@ Status values: **found** / **fix ready** (committed on a local branch from `upst
 - **Platform:** all. Seen on macOS in both of this fork's baseline builds, and in upstream's own CI: the latest `main` run of the "CI" workflow ([run 37258828795](https://github.com/privkeyio/libnostr-c/actions/runs/37258828795), v0.2.2, Ubuntu) prints the same line in its valgrind step, which runs `test_runner` directly. The "Build and Test" workflow uses `ctest --output-on-failure`, which prints nothing for programs it counts as passed, so it does not show there.
 - **Fix:** `test_zap_verify` now requests 21,000,000 millisats, and both zap verify tests (`:213`, `:290`) use the 64-character hex of the recipient key. `test_zap_verify_invalid_amount` keeps its deliberate 42,000-millisat mismatch. Test data only.
 - **Proof (2026-11-19, macOS, OpenSSL build of upstream code with the fallback runner):** before the fix, the `ctest -V` log prints `Assertion failed: NOSTR_OK != err`; after it, the line is gone, all six zap tests print `Success`, and `ctest` reports 15/15. With real Unity (#4) the same failure is counted: `unit_tests` fails with `test_zap_verify:FAIL: Expected 0 Was 2` before this fix and passes after.
-- **Status:** fix ready. Commit `e8762ba` on local branch `fix-zap-test-data` (from `upstream/main` `e07af71`, one commit, not pushed, no PR); cherry-picked onto `esp32-noscrypt-free` as `0d3d2ce`. No matching upstream issue or PR. Must be merged before or together with #4, because #4 makes this failure count.
+- **Status:** issue opened. Commit `e8762ba` on local branch `fix-zap-test-data` (from `upstream/main` `e07af71`, one commit, not pushed, no PR); cherry-picked onto `esp32-noscrypt-free` as `0d3d2ce`. Raised in upstream issue [#76](https://github.com/privkeyio/libnostr-c/issues/76) (2026-11-19), with #3, #4, #7 and #9 together; no reply yet. Must be merged before or together with #4, because #4 makes this failure count.
 
 ## 4. Fallback test runner does not count failures
 
@@ -75,7 +75,7 @@ Status values: **found** / **fix ready** (committed on a local branch from `upst
   - NIP-51, NIP-65 and relay integration use their own check macros and already make `ctest` fail. Left as they are; converting them is a possible follow-up.
   - On CMake 3.16–3.17, Unity's own install rules still apply, because `FetchContent`'s `SOURCE_SUBDIR` (used to skip them) needs CMake 3.18.
 - **Merge order:** this makes `test_zap_verify` fail upstream's CI, and five tests fail in builds without cJSON (Windows), so #3 and #9 must be merged first or together.
-- **Status:** fix ready. Local branch `fix-test-unity` (from `upstream/main` `e07af71`, not pushed, no PR); cherry-picked onto `esp32-noscrypt-free` as `2b998e7`, `0425ac7`, `2693d82`, `b4461b5`, `86262ab`, `4e19e6c`. Flagged once before: in upstream PR [#52](https://github.com/privkeyio/libnostr-c/pull/52) an automated reviewer noted that non-Unity failures don't propagate and can give false-green CI (for `test_nip18.c`, marked minor). There was no reply and no issue.
+- **Status:** issue opened. Local branch `fix-test-unity` (from `upstream/main` `e07af71`, not pushed, no PR); cherry-picked onto `esp32-noscrypt-free` as `2b998e7`, `0425ac7`, `2693d82`, `b4461b5`, `86262ab`, `4e19e6c`. Flagged once before: in upstream PR [#52](https://github.com/privkeyio/libnostr-c/pull/52) an automated reviewer noted that non-Unity failures don't propagate and can give false-green CI (for `test_nip18.c`, marked minor). No one replied, and no issue was opened at the time. Raised in upstream issue [#76](https://github.com/privkeyio/libnostr-c/issues/76) (2026-11-19), with #3, #4, #7 and #9 together; no reply yet.
 
 ## 5. Windows CI test step prints a misleading message on failure
 
@@ -105,7 +105,7 @@ Status values: **found** / **fix ready** (committed on a local branch from `upst
 - **Fix (tests only):** `6be2a14` adds `option(BUILD_TESTING "Build the test suite" ON)` around `enable_testing()` and `add_subdirectory(tests)`, and makes `CONTRIBUTING.md` and `docs/GETTING_STARTED.md` say `BUILD_TESTING` like `docs/BUILDING.md`. `BUILD_TESTING` is CMake's standard name, which package managers already turn off. `BUILD_EXAMPLES` is unchanged.
 - **Proof (2026-11-19, macOS):** with `-DBUILD_TESTING=OFF`, configure succeeds and no Unity download happens (no `_deps` folder); with the default, all 15 test programs are built.
 - **Platform:** all.
-- **Status:** fix ready for the tests switch. Commit `6be2a14`, the first commit on local branch `fix-test-unity` (from `upstream/main` `e07af71`, not pushed, no PR); cherry-picked onto `esp32-noscrypt-free` as `b3182e3`. `BUILD_EXAMPLES`: found. No matching upstream issue or PR.
+- **Status:** issue opened for the tests switch. Commit `6be2a14`, the first commit on local branch `fix-test-unity` (from `upstream/main` `e07af71`, not pushed, no PR); cherry-picked onto `esp32-noscrypt-free` as `b3182e3`. Raised in upstream issue [#76](https://github.com/privkeyio/libnostr-c/issues/76) (2026-11-19), with #3, #4, #7 and #9 together; no reply yet. `BUILD_EXAMPLES`: found, not in the issue; no matching upstream issue or PR.
 
 ## 8. cmake --install ships the header template, not the generated header
 
@@ -126,4 +126,4 @@ Status values: **found** / **fix ready** (committed on a local branch from `upst
 - **Fix:** the three event tests expect `NOSTR_ERR_NOT_SUPPORTED`; the two zap verify tests call `TEST_IGNORE_MESSAGE("needs cJSON")` when `HAVE_CJSON` is undefined. Test code only.
 - **Proof (2026-11-19, macOS, no-cJSON build):** before, `114 Tests 5 Failures 0 Ignored`; after, `114 Tests 0 Failures 2 Ignored` and 15/15. The normal builds stay at 359 tests, 0 failures.
 - **Platform:** all builds without cJSON; seen in Windows CI (fork run 44643270660) and reproduced on macOS.
-- **Status:** fix ready. Commit `83cb603` on local branch `fix-tests-without-cjson`, **stacked on `fix-test-unity`** rather than `upstream/main`: on `upstream/main` the failures cannot be counted and `TEST_IGNORE` does not exist, so it goes upstream as part of the Unity series (#4). Cherry-picked onto `esp32-noscrypt-free` as `31e453d`. Not pushed, no PR. No matching upstream issue or PR.
+- **Status:** issue opened. Commit `83cb603` on local branch `fix-tests-without-cjson`, **stacked on `fix-test-unity`** rather than `upstream/main`: on `upstream/main` the failures cannot be counted and `TEST_IGNORE` does not exist, so it goes upstream as part of the Unity series (#4). Cherry-picked onto `esp32-noscrypt-free` as `31e453d`. Not pushed, no PR. Raised in upstream issue [#76](https://github.com/privkeyio/libnostr-c/issues/76) (2026-11-19), with #3, #4, #7 and #9 together; no reply yet.
