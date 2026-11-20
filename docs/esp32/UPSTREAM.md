@@ -12,10 +12,11 @@ Status values: **found** / **fix ready** (committed on a local branch from `upst
 | 2 | [SECP256K1_LIB_DIR ignored when pkg-config finds secp256k1](#2-secp256k1_lib_dir-ignored-when-pkg-config-finds-secp256k1) | found |
 | 3 | [test_zap_verify uses inconsistent test data](#3-test_zap_verify-uses-inconsistent-test-data) | fix ready |
 | 4 | [Fallback test runner does not count failures](#4-fallback-test-runner-does-not-count-failures) | fix ready |
-| 5 | [Windows CI ignores test failures](#5-windows-ci-ignores-test-failures) | found |
+| 5 | [Windows CI test step prints a misleading message on failure](#5-windows-ci-test-step-prints-a-misleading-message-on-failure) | found (cosmetic) |
 | 6 | [ESP-IDF smoke app only builds from a folder named libnostr-c](#6-esp-idf-smoke-app-only-builds-from-a-folder-named-libnostr-c) | fix ready |
 | 7 | [BUILD_TESTS and BUILD_EXAMPLES are documented but do not exist](#7-build_tests-and-build_examples-are-documented-but-do-not-exist) | fix ready (tests switch only) |
 | 8 | [cmake --install ships the header template, not the generated header](#8-cmake---install-ships-the-header-template-not-the-generated-header) | found |
+| 9 | [Event and zap tests fail in builds without cJSON](#9-event-and-zap-tests-fail-in-builds-without-cjson) | fix ready (stacked on #4) |
 
 ---
 
@@ -73,17 +74,18 @@ Status values: **found** / **fix ready** (committed on a local branch from `upst
   - The 9 test files that no default build compiles (NIP-04, NIP-44 ×2, NIP-47 ×2, NIP-59, HD keys ×2, NIP-06) are unchanged, since they could not be built or run here. NIP-44 and NIP-59 are among them; this fork switches them on in M5 and M8.
   - NIP-51, NIP-65 and relay integration use their own check macros and already make `ctest` fail. Left as they are; converting them is a possible follow-up.
   - On CMake 3.16–3.17, Unity's own install rules still apply, because `FetchContent`'s `SOURCE_SUBDIR` (used to skip them) needs CMake 3.18.
-- **Merge order:** this makes `test_zap_verify` fail upstream's CI, so #3 must be merged first or together.
+- **Merge order:** this makes `test_zap_verify` fail upstream's CI, and five tests fail in builds without cJSON (Windows), so #3 and #9 must be merged first or together.
 - **Status:** fix ready. Local branch `fix-test-unity` (from `upstream/main` `e07af71`, not pushed, no PR); cherry-picked onto `esp32-noscrypt-free` as `2b998e7`, `0425ac7`, `2693d82`, `b4461b5`, `86262ab`, `4e19e6c`. Flagged once before: in upstream PR [#52](https://github.com/privkeyio/libnostr-c/pull/52) an automated reviewer noted that non-Unity failures don't propagate and can give false-green CI (for `test_nip18.c`, marked minor). There was no reply and no issue.
 
-## 5. Windows CI ignores test failures
+## 5. Windows CI test step prints a misleading message on failure
 
-- **What is wrong:** the Windows job runs `ctest --preset win-release || echo "Tests completed with warnings"`. If any test fails, `echo` succeeds and the step passes, so a failing Windows test can never turn CI red.
+- **What is wrong:** the Windows job runs `ctest --preset win-release || echo "Tests completed with warnings"`. The intent looks like hiding test failures, but it does not: the step runs in PowerShell (`pwsh`), and GitHub ends a PowerShell step with the last native command's exit code, which is still ctest's. So a failing test does turn the job red; it only prints "Tests completed with warnings" first, which reads as if nothing failed.
+- **Correction (2026-11-19):** this entry first said the step hides failures. This fork's run 44643270660 showed otherwise: the log prints `Tests completed with warnings` and then `Process completed with exit code 1`, and the job failed (see #9). Lowered to cosmetic.
 - **File and line:** `.github/workflows/build.yml:309` (job `build-windows`, step "Test using CMake Preset").
-- **How to reproduce:** read the step; or make a test that counts failures (for example `test_nip49`) fail and push to a fork: the Windows job stays green. The latest upstream `main` run ([run 37258828793](https://github.com/privkeyio/libnostr-c/actions/runs/37258828793)) shows `100% tests passed out of 14` there, so it is not hiding a failure today, as far as `ctest` can tell (see #4).
-- **Proposed fix:** remove `|| echo "Tests completed with warnings"`. If some Windows tests are known to fail, mark those tests as expected failures or skips explicitly instead of masking the whole step.
+- **How to reproduce:** make a test fail on Windows and push to a fork; the job fails, and the log shows the message just before the exit code.
+- **Proposed fix:** remove `|| echo "Tests completed with warnings"`; the result is the same and the log no longer suggests the tests passed with warnings.
 - **Platform:** Windows CI only.
-- **Status:** found. No matching upstream issue or PR.
+- **Status:** found (cosmetic). No matching upstream issue or PR.
 
 ## 6. ESP-IDF smoke app only builds from a folder named libnostr-c
 
@@ -113,3 +115,15 @@ Status values: **found** / **fix ready** (committed on a local branch from `upst
 - **Proposed fix:** install the generated header as well, for example `install(FILES ${CMAKE_CURRENT_BINARY_DIR}/include/nostr_features.h DESTINATION include)`, and exclude the template: `install(DIRECTORY include/ DESTINATION include PATTERN "*.in" EXCLUDE)`.
 - **Platform:** all host builds (the ESP-IDF build does not use `cmake --install`). Seen on macOS while checking that Unity is not installed (#4).
 - **Status:** found. No matching upstream issue or PR.
+
+## 9. Event and zap tests fail in builds without cJSON
+
+- **What is wrong:** two separate test problems that only show when cJSON is off, as in the Windows preset (`NOSTR_FEATURE_JSON_ENHANCED` off, so `HAVE_CJSON` is undefined). The fallback runner hid both; with real Unity (#4) they fail the Windows job.
+  - In their no-cJSON branches, `test_event_to_json`, `test_event_from_json` and `test_event_from_json_invalid` expect `NOSTR_ERR_ENCODING`, but `src/event.c` returns `NOSTR_ERR_NOT_SUPPORTED` there (for example `src/event.c:438`). The library is right: `docs/FEATURE_FLAGS.md:101` says "Disabled functions return `NOSTR_ERR_NOT_SUPPORTED`", the enum documents it as "Feature not supported" and `NOSTR_ERR_ENCODING` as an encoding/decoding error, and all 11 compiled-out (`#else`) branches in `src/` that return either code return `NOT_SUPPORTED`. Both the expectation and the return date from the first commit (`71265bf`).
+  - `test_zap_verify` and `test_zap_verify_invalid_amount` serialize the zap request with `nostr_event_to_json`, which cannot work without cJSON, and do not check for it.
+- **File and line:** `tests/test_event.c:140`, `:171`, `:185`; `tests/test_zap.c:147`, `:224` (as on branch `fix-test-unity`).
+- **How to reproduce:** with real Unity (#4), configure with `-DNOSTR_FEATURE_JSON_ENHANCED=OFF -DNOSTR_FEATURE_RELAY=OFF` (relay support switches JSON back on) and run `ctest`: `unit_tests` reports `114 Tests 5 Failures`, three `Expected 6 Was 12` and two `Expected 0 Was 12`. Upstream-style CI shows the same in `build-windows`.
+- **Fix:** the three event tests expect `NOSTR_ERR_NOT_SUPPORTED`; the two zap verify tests call `TEST_IGNORE_MESSAGE("needs cJSON")` when `HAVE_CJSON` is undefined. Test code only.
+- **Proof (2026-11-19, macOS, no-cJSON build):** before, `114 Tests 5 Failures 0 Ignored`; after, `114 Tests 0 Failures 2 Ignored` and 15/15. The normal builds stay at 359 tests, 0 failures.
+- **Platform:** all builds without cJSON; seen in Windows CI (fork run 44643270660) and reproduced on macOS.
+- **Status:** fix ready. Commit `83cb603` on local branch `fix-tests-without-cjson`, **stacked on `fix-test-unity`** rather than `upstream/main`: on `upstream/main` the failures cannot be counted and `TEST_IGNORE` does not exist, so it goes upstream as part of the Unity series (#4). Cherry-picked onto `esp32-noscrypt-free` as `31e453d`. Not pushed, no PR. No matching upstream issue or PR.

@@ -247,3 +247,11 @@ Identical in both builds (OpenSSL and mbedTLS 3.6.8), except where noted. The tw
 - **ESP32 build unaffected:** the smoke app still builds from `4e19e6c` for `esp32s3` at 0x3b640 bytes, the same as the M2 Unity run, with no Unity download (the ESP-IDF path of `CMakeLists.txt` returns before `tests/`).
 - **Warnings:** in our own code, still only `tests/test_thread_safety.c:156` from M1. Unity compiles without warnings.
 - **Left out:** the 9 test files no default build compiles, among them NIP-44 and NIP-59 (switched on in M5 and M8).
+
+### CI after M2b
+
+On `4487bc8` (this fork's Actions runs 44643270900 and 44643270660), 11 of 12 jobs green; `build-windows` red:
+
+- **Green:** the "CI" job (15/15; `unit_tests` 119 Tests 0 Failures; valgrind 0 errors; the zap `Assertion failed` line is gone), `build-esp-idf` in QEMU (`11 Tests 0 Failures`, `OK`, `SMOKE-PASS`), and all nine Linux and macOS jobs (15/15 each).
+- **Red, `build-windows`:** 13/14 programs; `unit_tests` `114 Tests 5 Failures`. The Windows preset builds without cJSON, and five tests were never written for that case: three event tests expect the wrong error code, and two zap tests need JSON. The fallback runner had hidden them. Logged as [UPSTREAM.md](UPSTREAM.md) #9; the step's `|| echo` did not mask the failure, which corrected #5.
+- **Fix:** `31e453d` (from `fix-tests-without-cjson`). Reproduced on macOS with `-DNOSTR_FEATURE_JSON_ENHANCED=OFF -DNOSTR_FEATURE_RELAY=OFF` in `build/m2b-nocjson`: `114 Tests 5 Failures` before, `114 Tests 0 Failures 2 Ignored` after. The two normal Mac builds stay at 15/15 and 359 tests, 0 failures. CI on `31e453d` and later: to be recorded after the next push.
