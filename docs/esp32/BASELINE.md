@@ -262,3 +262,12 @@ On `3ccf02d` (runs 44660359761 and 44660359716, which include `31e453d`), all 12
 - `build-esp-idf` in QEMU: `11 Tests 0 Failures 0 Ignored`, `SMOKE-PASS`;
 - all nine Linux and macOS jobs: 15/15 each;
 - `build-windows`: 14/14. ctest shows a program's Unity summary only when it fails, so the two ignored zap tests are not in the log.
+
+## Sync with upstream (2026-11-25)
+
+`main` fast-forwarded to upstream `21d3073` (#83 and #86 to #91, after v0.3.0) and merged into `esp32-noscrypt-free` as `2b8ea0a`. The 7 conflicts were the fork's earlier, unsquashed versions of #77, #78 and #83; upstream's version was taken for each. The tree now differs from upstream only in `CLAUDE.md`, `docs/esp32/`, the smoke app's Unity tests (`test/esp-idf/main/`) and the CI push triggers.
+
+- **Mac, both builds** (M1 commands in new folders `build/sync-secp` and `build/sync-mbedtls`, linker workaround included): **15/15** programs, **368** Unity checks, **0 failures**. That is 364 plus 3 new checks from #91 and 1 from #88; #89's NIP-44 tests are not built by default (NIP-44 is off).
+- **Smoke app** (ESP-IDF 5.5.6, `esp32s3`, built only): with a freshly generated sdkconfig, `CONFIG_COMPILER_OPTIMIZATION_PERF=y` from #84 applies, so the library and our M2 Unity tests compile at `-O2` for the first time. Builds; `libnostr_test.bin` 0x3b330 bytes, 77% of the app partition free. **219 warnings:** 217 from secp256k1-frost (`-Wunused-function`, as in M2) and 2 `-Wuse-after-free` in upstream code, logged as [UPSTREAM.md](UPSTREAM.md) #10.
+- **Without the linker workaround** the secp256k1 build fails to link, as in M1 ([UPSTREAM.md](UPSTREAM.md) #2): still needed after the sync.
+- **Fork CI** on `2b8ea0a` and `21d3073` (runs 45642931074 and 45642931419): every job that got a runner passed, including `build-esp-idf` in QEMU and Windows (14/14, now counting failures after #86); the macOS jobs never got a runner (GitHub capacity).
