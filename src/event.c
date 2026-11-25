@@ -131,14 +131,19 @@ nostr_error_t nostr_event_set_content(nostr_event* event, const char* content)
     return NOSTR_OK;
 }
 
+static size_t max_tags_limit(void)
+{
+    const nostr_config* config = nostr_config_get_current();
+    return config ? config->max_tags : NOSTR_MAX_TAGS_LIMIT;
+}
+
 nostr_error_t nostr_event_add_tag(nostr_event* event, const char** values, size_t count)
 {
     if (!event || !values || count == 0) {
         return NOSTR_ERR_INVALID_PARAM;
     }
 
-    const nostr_config* config = nostr_config_get_current();
-    if (config && event->tags_count >= config->max_tags) {
+    if (event->tags_count >= max_tags_limit()) {
         return NOSTR_ERR_INVALID_PARAM;
     }
 
@@ -161,8 +166,12 @@ nostr_error_t nostr_event_add_tag(nostr_event* event, const char** values, size_
     if (values_size > SIZE_MAX - strings_size) {
         return NOSTR_ERR_INVALID_PARAM;
     }
-    size_t total_size = values_size + strings_size;
-    
+    size_t pad = (sizeof(char*) - event->tag_arena->used % sizeof(char*)) % sizeof(char*);
+    if (values_size + strings_size > SIZE_MAX - pad) {
+        return NOSTR_ERR_INVALID_PARAM;
+    }
+    size_t total_size = pad + values_size + strings_size;
+
     if (event->tag_arena->used + total_size > event->tag_arena->capacity) {
         size_t new_capacity = event->tag_arena->capacity;
         size_t required = event->tag_arena->used + total_size;
@@ -201,7 +210,8 @@ nostr_error_t nostr_event_add_tag(nostr_event* event, const char** values, size_
     event->tags = new_tags;
 
     nostr_tag* tag = &event->tags[event->tags_count];
-    
+
+    event->tag_arena->used += pad;
     tag->values = (char**)tag_arena_alloc(event->tag_arena, values_size);
     if (!tag->values) {
         return NOSTR_ERR_MEMORY;
@@ -317,26 +327,33 @@ static char* serialize_for_id(const nostr_event* event)
 #else
     char pubkey_hex[65];
     char* content_escaped = escape_json_string(event->content ? event->content : "");
-    
+    if (!content_escaped) return NULL;
+
     for (int i = 0; i < NOSTR_PUBKEY_SIZE; i++) {
         sprintf(pubkey_hex + i * 2, "%02x", event->pubkey.data[i]);
     }
     pubkey_hex[64] = '\0';
 
+    /* Per tag: comma and brackets. Per value: comma, quotes, and up to 6 bytes per escaped char. */
     size_t json_size = 512 + strlen(content_escaped);
     for (size_t i = 0; i < event->tags_count; i++) {
+        if (json_size > SIZE_MAX - 3) { free(content_escaped); return NULL; }
+        json_size += 3;
         for (size_t j = 0; j < event->tags[i].count; j++) {
-            json_size += strlen(event->tags[i].values[j]) * 6 + 4;
+            const char* value = event->tags[i].values[j] ? event->tags[i].values[j] : "";
+            size_t len = strlen(value);
+            if (json_size > SIZE_MAX - 3 || len > (SIZE_MAX - 3 - json_size) / 6) { free(content_escaped); return NULL; }
+            json_size += len * 6 + 3;
         }
     }
-    
+
     char* result = malloc(json_size);
     if (!result) {
         free(content_escaped);
         return NULL;
     }
-    
-    int pos = snprintf(result, json_size, "[0,\"%s\",%" PRId64 ",%d,[", 
+
+    size_t pos = (size_t)snprintf(result, json_size, "[0,\"%s\",%" PRId64 ",%d,[",
                       pubkey_hex, event->created_at, event->kind);
     
     for (size_t i = 0; i < event->tags_count; i++) {
@@ -344,7 +361,7 @@ static char* serialize_for_id(const nostr_event* event)
         result[pos++] = '[';
         for (size_t j = 0; j < event->tags[i].count; j++) {
             if (j > 0) result[pos++] = ',';
-            char* tag_escaped = escape_json_string(event->tags[i].values[j]);
+            char* tag_escaped = escape_json_string(event->tags[i].values[j] ? event->tags[i].values[j] : "");
             if (!tag_escaped) {
                 free(result);
                 free(content_escaped);
@@ -524,8 +541,7 @@ nostr_error_t nostr_event_from_json(const char* json, nostr_event** event)
     cJSON* tags_json = cJSON_GetObjectItem(root, "tags");
     if (tags_json && cJSON_IsArray(tags_json)) {
         int tags_count = cJSON_GetArraySize(tags_json);
-        const nostr_config* config = nostr_config_get_current();
-        if (config && tags_count > (int)config->max_tags) {
+        if ((size_t)tags_count > max_tags_limit()) {
             nostr_event_destroy(*event);
             cJSON_Delete(root);
             return NOSTR_ERR_INVALID_PARAM;
@@ -539,8 +555,10 @@ nostr_error_t nostr_event_from_json(const char* json, nostr_event** event)
             }
 
             (*event)->tags_count = 0;
-            for (int i = 0; i < tags_count; i++) {
-                cJSON* tag_json = cJSON_GetArrayItem(tags_json, i);
+            /* cJSON_GetArrayItem walks the list from the head, so index loops
+             * are quadratic in the tag and value counts. */
+            cJSON* tag_json = NULL;
+            cJSON_ArrayForEach(tag_json, tags_json) {
                 if (cJSON_IsArray(tag_json)) {
                     int tag_size = cJSON_GetArraySize(tag_json);
                     if (tag_size > 0) {
@@ -551,20 +569,18 @@ nostr_error_t nostr_event_from_json(const char* json, nostr_event** event)
                             return NOSTR_ERR_MEMORY;
                         }
                         
-                        for (int j = 0; j < tag_size; j++) {
-                            cJSON* value_json = cJSON_GetArrayItem(tag_json, j);
-                            if (cJSON_IsString(value_json)) {
-                                temp_values[j] = value_json->valuestring;
-                            } else {
-                                temp_values[j] = "";
-                            }
+                        int j = 0;
+                        cJSON* value_json = NULL;
+                        cJSON_ArrayForEach(value_json, tag_json) {
+                            temp_values[j++] = cJSON_IsString(value_json) ? value_json->valuestring : "";
                         }
                         
-                        if (nostr_event_add_tag(*event, temp_values, tag_size) != NOSTR_OK) {
+                        nostr_error_t tag_err = nostr_event_add_tag(*event, temp_values, tag_size);
+                        if (tag_err != NOSTR_OK) {
                             free(temp_values);
                             nostr_event_destroy(*event);
                             cJSON_Delete(root);
-                            return NOSTR_ERR_MEMORY;
+                            return tag_err;
                         }
                         
                         free(temp_values);

@@ -1,5 +1,38 @@
 # Changelog
 
+## [Unreleased]
+
+### Security
+- NIP-47 session lookups read 64 bytes of the caller's session ID whatever its length, so a shorter string passed to `nostr_nip47_session_add_permission`, `_check_permission`, `_get_connection`, `_extend` or `_destroy` was read past its end. An ID that is not exactly 64 characters now matches no session
+- `nostr_nip47_session_check_permission` checked a spending limit with `used + amount > limit` in 64-bit unsigned arithmetic, so an amount near 2^64 msats wrapped the sum below the limit and was approved, and the used total wrapped back to a small value. The amount is now compared with the remaining allowance
+- `nostr_event_parse` ignored `json_len` and read `json` up to a NUL, so a length-delimited buffer without a terminator was read past its end. It now reads exactly `json_len` bytes, and 0 still means a NUL-terminated string, as in `nostr_filter_parse` and `nostr_client_msg_parse`
+- Events built or parsed after `nostr_init()` alone had no tag limit, because `max_tags` was checked only when `nostr_init_with_config()` had set a config. Without a config, `nostr_event_add_tag` and `nostr_event_from_json` now stop at `NOSTR_MAX_TAGS_LIMIT` (10000) tags
+- `nostr_event_from_json` looked up each tag and each tag value by index, which cJSON resolves by walking its list from the start, so parse time grew with the square of the tag and value counts. A 600 KB event with one 200000-value tag took 25 seconds to parse and now takes about 10 ms
+
+### Changed
+- The default `max_tags` is now 2000 and `nostr_config_validate` accepts up to `NOSTR_MAX_TAGS_LIMIT` (10000), up from 100 and 1000, so kind 3 contact lists with more than 100 entries parse under the default config
+
+### Fixed
+- NIP-44 padding rounded to a chunk based on the largest power of two at or below the message length instead of the smallest at or above it, as the spec does. For half of all lengths from 257 to 65535 bytes (400, 515 and 700 among them), messages were padded to the wrong size, so other NIP-44 implementations rejected them and libnostr-c rejected theirs. This affects NIP-17, NIP-46, NIP-47 and NIP-59 payloads over 256 bytes. Plaintexts over 57344 bytes pad to 65536, which noscrypt does not accept, so `nostr_nip44_encrypt` now returns `NOSTR_ERR_INVALID_PARAM` for them instead of producing a payload no other implementation reads
+
+## [0.3.0] - 2026-11-22
+
+### Security
+- Fix a heap buffer overflow in `nostr_event_compute_id`, and so in signing and verification, on builds that use the basic JSON serializer (cJSON absent, or relay and JSON_ENHANCED off). The buffer size left out the brackets and comma around each tag, so an event with a few hundred tags wrote past the end of the heap buffer. `nostr_init()` alone sets no tag limit
+
+### Added
+- A `BUILD_TESTING` option (default ON) to skip the test suite. The tests build only when libnostr-c is the top-level project, so a project that adds it with `add_subdirectory()` no longer builds them
+
+### Changed
+- `NOSTR_FEATURE_CRYPTO_NOSCRYPT` takes `AUTO` (the new default), `ON` or `OFF`. `ON` now fails the configure when noscrypt is not found instead of quietly building with secp256k1, and `AUTO` falls back to secp256k1 with a warning. A build directory configured by an older version may still have `ON` cached
+
+### Fixed
+- An empty `ids`, `authors`, `kinds`, `#e` or `#p` list in a filter now matches nothing, as NIP-01 requires, instead of being treated as absent and matching every event. So does a list whose items are all of the wrong type, such as `{"ids":[1]}`. A present list is now marked by a non-NULL pointer, even when its count is 0, and `nostr_filter_clone` and `nostr_filter_has_tag_filters` follow the same rule. Code that builds a `nostr_filter_t` by hand must leave an unused list NULL
+- `nostr_filter_parse`, and so REQ and COUNT, reject a filter that is not a JSON object, and a list key whose value is not an array (such as `{"kinds":1}` or `{"#e":"x"}`). Both were read as an unconstrained filter that matched every event
+- Filter keys are matched case-sensitively, so `"Ids"` no longer shadows `"ids"` and `#E` is read only as the uppercase tag rather than also as `#e`
+- Each tag's value array is now pointer-aligned inside the event's tag arena. It was placed right after the previous tag's strings, so an event whose earlier tags' strings did not end on a pointer boundary stored and read `char*` values at misaligned addresses, which is undefined behavior (reported by UBSan in seven of the test programs). NIP-13 nonce tags that grow a target value had the same problem
+- The ESP-IDF component compiles at `-O2` (`CONFIG_COMPILER_OPTIMIZATION_PERF`). GCC reported a false `maybe-uninitialized` error in the NIP-21 bech32 decoder, which ESP-IDF builds treat as fatal
+
 ## [0.2.2] - 2026-10-04
 
 ### Changed

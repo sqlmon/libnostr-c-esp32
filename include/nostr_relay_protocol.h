@@ -111,6 +111,9 @@ typedef struct {
 
 /**
  * @brief Filter structure for subscription matching (NIP-01, NIP-50)
+ *
+ * A list is absent when its pointer is NULL. A non-NULL list with a count of
+ * zero is present but empty, and matches no events (NIP-01).
  */
 typedef struct {
     char** ids;                 /**< Event ID prefixes to match */
@@ -394,8 +397,8 @@ void nostr_relay_msg_count(nostr_relay_msg_t* msg, const char* query_id, int64_t
 
 /**
  * @brief Parse an event from JSON
- * @param json JSON string containing the event object
- * @param json_len Length of JSON string
+ * @param json JSON containing the event object
+ * @param json_len Length of json in bytes, or 0 if json is NUL-terminated
  * @param event Output event pointer (caller must free with nostr_event_destroy)
  * @return NOSTR_RELAY_OK on success, error code otherwise
  */
@@ -835,7 +838,7 @@ bool nostr_filter_has_tag_filters(const nostr_filter_t* filter);
  * @brief Get IDs filter array (hex strings)
  * @param filter Filter to query
  * @param out_count Output: number of IDs
- * @return Pointer to IDs array, or NULL if not specified
+ * @return Pointer to IDs array, or NULL if not specified (non-NULL with a count of 0 matches nothing)
  */
 const char** nostr_filter_get_ids(const nostr_filter_t* filter, size_t* out_count);
 
@@ -843,7 +846,7 @@ const char** nostr_filter_get_ids(const nostr_filter_t* filter, size_t* out_coun
  * @brief Get authors filter array (hex strings)
  * @param filter Filter to query
  * @param out_count Output: number of authors
- * @return Pointer to authors array, or NULL if not specified
+ * @return Pointer to authors array, or NULL if not specified (non-NULL with a count of 0 matches nothing)
  */
 const char** nostr_filter_get_authors(const nostr_filter_t* filter, size_t* out_count);
 
@@ -851,7 +854,7 @@ const char** nostr_filter_get_authors(const nostr_filter_t* filter, size_t* out_
  * @brief Get kinds filter array
  * @param filter Filter to query
  * @param out_count Output: number of kinds
- * @return Pointer to kinds array, or NULL if not specified
+ * @return Pointer to kinds array, or NULL if not specified (non-NULL with a count of 0 matches nothing)
  */
 const int32_t* nostr_filter_get_kinds(const nostr_filter_t* filter, size_t* out_count);
 

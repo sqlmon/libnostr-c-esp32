@@ -1,5 +1,6 @@
 #include "unity.h"
 #include <stdio.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -72,6 +73,42 @@ void test_event_add_tag(void)
     nostr_event_destroy(event);
 }
 
+static void require_aligned_values(const nostr_event* event)
+{
+    for (size_t i = 0; i < event->tags_count; i++) {
+        if ((uintptr_t)event->tags[i].values % sizeof(char*) != 0) {
+            char msg[64];
+            snprintf(msg, sizeof(msg), "tag %zu values array is misaligned", i);
+            TEST_FAIL_MESSAGE(msg);
+        }
+    }
+}
+
+void test_event_tag_values_aligned(void)
+{
+    nostr_event* event = NULL;
+    TEST_ASSERT_EQUAL(NOSTR_OK, nostr_event_create(&event));
+
+    char value[80];
+    for (size_t n = 1; n < sizeof(value); n++) {
+        memset(value, 'x', n);
+        value[n] = '\0';
+        const char* tag[] = {"t", value};
+        TEST_ASSERT_EQUAL(NOSTR_OK, nostr_event_add_tag(event, tag, 2));
+    }
+    require_aligned_values(event);
+    TEST_ASSERT_EQUAL_STRING("xxx", event->tags[2].values[1]);
+
+#ifdef NOSTR_FEATURE_NIP13
+    TEST_ASSERT_EQUAL(NOSTR_OK, nostr_nip13_add_nonce_tag(event, 1, 0));
+    TEST_ASSERT_EQUAL(NOSTR_OK, nostr_nip13_add_nonce_tag(event, 123, 8));
+    require_aligned_values(event);
+    TEST_ASSERT_EQUAL_STRING("8", event->tags[event->tags_count - 1].values[2]);
+#endif
+
+    nostr_event_destroy(event);
+}
+
 void test_event_add_tag_invalid_params(void)
 {
     nostr_event* event = NULL;
@@ -105,6 +142,35 @@ void test_event_compute_id(void)
     uint8_t zero_id[32] = {0};
     TEST_ASSERT_NOT_EQUAL(0, memcmp(event->id, zero_id, 32));
     
+    nostr_event_destroy(event);
+}
+
+void test_event_compute_id_many_tags(void)
+{
+    nostr_event* event = NULL;
+    TEST_ASSERT_EQUAL(NOSTR_OK, nostr_event_create(&event));
+    event->kind = 1;
+    event->created_at = 1234567890;
+    nostr_event_set_content(event, "x");
+    for (int i = 0; i < 32; i += 8) {
+        const uint8_t chunk[8] = {0x12, 0x34, 0x56, 0x78, 0x9a, 0xbc, 0xde, 0xf0};
+        memcpy(event->pubkey.data + i, chunk, 8);
+    }
+
+    const char* empty[1] = {""};
+    for (int i = 0; i < 600; i++) {
+        TEST_ASSERT_EQUAL(NOSTR_OK, nostr_event_add_tag(event, empty, 1));
+    }
+    const char* escaped[2] = {"e", "a\"b\\\n"};
+    TEST_ASSERT_EQUAL(NOSTR_OK, nostr_event_add_tag(event, escaped, 2));
+
+    TEST_ASSERT_EQUAL(NOSTR_OK, nostr_event_compute_id(event));
+
+    const uint8_t expected[32] = {
+        0x4a, 0x56, 0x0c, 0xd0, 0xb3, 0xf6, 0xe5, 0x68, 0xe1, 0x46, 0x47, 0xc0, 0x8a, 0x86, 0xf4, 0xf8,
+        0xcf, 0x9e, 0x21, 0x53, 0x4a, 0x75, 0x4f, 0x96, 0x41, 0x75, 0x9d, 0xd1, 0x79, 0x10, 0x0f, 0x89};
+    TEST_ASSERT_EQUAL_HEX8_ARRAY_MESSAGE(expected, event->id, 32, "event ID mismatch for many-tags event");
+
     nostr_event_destroy(event);
 }
 
@@ -186,6 +252,72 @@ void test_event_from_json_invalid(void)
     #endif
 }
 
+/* test_runner calls nostr_init() only, so these run with no config set. */
+void test_event_add_tag_default_limit(void)
+{
+    nostr_event* event = NULL;
+    TEST_ASSERT_EQUAL(NOSTR_OK, nostr_event_create(&event));
+    const char* tag[2] = {"p", "0000000000000000000000000000000000000000000000000000000000000000"};
+    for (int i = 0; i < NOSTR_MAX_TAGS_LIMIT; i++) {
+        TEST_ASSERT_EQUAL(NOSTR_OK, nostr_event_add_tag(event, tag, 2));
+    }
+    TEST_ASSERT_EQUAL(NOSTR_ERR_INVALID_PARAM, nostr_event_add_tag(event, tag, 2));
+    TEST_ASSERT_EQUAL(NOSTR_MAX_TAGS_LIMIT, event->tags_count);
+    nostr_event_destroy(event);
+}
+
+static char* json_with_tags(size_t count)
+{
+    const char* head = "{\"id\":\"1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef\","
+        "\"pubkey\":\"123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0\","
+        "\"created_at\":1234567890,\"kind\":3,\"tags\":[";
+    const char* tail = "],\"content\":\"\",\"sig\":\"abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890"
+        "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890\"}";
+    const char* tag = "[\"p\",\"x\"]";
+    size_t len = strlen(head) + count * (strlen(tag) + 1) + strlen(tail) + 1;
+    char* json = malloc(len);
+    TEST_ASSERT_NOT_NULL(json);
+    char* p = json;
+    p += sprintf(p, "%s", head);
+    for (size_t i = 0; i < count; i++) {
+        p += sprintf(p, "%s%s", i ? "," : "", tag);
+    }
+    sprintf(p, "%s", tail);
+    return json;
+}
+
+void test_event_from_json_default_limit(void)
+{
+#ifdef HAVE_CJSON
+    char* json = json_with_tags(NOSTR_MAX_TAGS_LIMIT);
+    nostr_event* event = NULL;
+    TEST_ASSERT_EQUAL(NOSTR_OK, nostr_event_from_json(json, &event));
+    TEST_ASSERT_EQUAL(NOSTR_MAX_TAGS_LIMIT, event->tags_count);
+    nostr_event_destroy(event);
+    free(json);
+
+    json = json_with_tags(NOSTR_MAX_TAGS_LIMIT + 1);
+    event = NULL;
+    TEST_ASSERT_EQUAL(NOSTR_ERR_INVALID_PARAM, nostr_event_from_json(json, &event));
+    free(json);
+#else
+    TEST_IGNORE_MESSAGE("needs cJSON");
+#endif
+}
+
+void test_config_max_tags_bounds(void)
+{
+    nostr_config config;
+    TEST_ASSERT_EQUAL(NOSTR_OK, nostr_config_get_defaults(&config));
+    TEST_ASSERT_EQUAL_UINT32(2000, config.max_tags);
+    config.max_tags = NOSTR_MAX_TAGS_LIMIT;
+    TEST_ASSERT_EQUAL(NOSTR_OK, nostr_config_validate(&config));
+    config.max_tags = NOSTR_MAX_TAGS_LIMIT + 1;
+    TEST_ASSERT_EQUAL(NOSTR_ERR_INVALID_PARAM, nostr_config_validate(&config));
+    config.max_tags = 0;
+    TEST_ASSERT_EQUAL(NOSTR_ERR_INVALID_PARAM, nostr_config_validate(&config));
+}
+
 void run_event_tests(void)
 {
     RUN_TEST(test_event_create_destroy);
@@ -194,8 +326,13 @@ void run_event_tests(void)
     RUN_TEST(test_event_set_content_invalid_params);
     RUN_TEST(test_event_add_tag);
     RUN_TEST(test_event_add_tag_invalid_params);
+    RUN_TEST(test_event_tag_values_aligned);
     RUN_TEST(test_event_compute_id);
+    RUN_TEST(test_event_compute_id_many_tags);
     RUN_TEST(test_event_to_json);
     RUN_TEST(test_event_from_json);
     RUN_TEST(test_event_from_json_invalid);
+    RUN_TEST(test_event_add_tag_default_limit);
+    RUN_TEST(test_event_from_json_default_limit);
+    RUN_TEST(test_config_max_tags_bounds);
 }

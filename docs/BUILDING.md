@@ -233,7 +233,7 @@ sudo dnf install cmake openssl-devel cjson-devel libwebsockets-devel
 - `CMAKE_BUILD_TYPE`: Set to `Release` for optimized builds or `Debug` for debugging
 - `CMAKE_INSTALL_PREFIX`: Installation directory (default: `/usr/local`)
 - `BUILD_SHARED_LIBS`: Build shared libraries (default: ON)
-- `BUILD_TESTING`: Build test suite (default: ON)
+- `BUILD_TESTING`: Build test suite (default: ON; only when libnostr-c is the top-level project, never under `add_subdirectory`)
 
 Example:
 ```bash
@@ -263,7 +263,7 @@ make test
 ./tests/test_nip59
 ```
 
-The tests use [Unity](https://github.com/ThrowTheSwitch/Unity) v2.6.0, which CMake downloads automatically, pinned by commit, only when `BUILD_TESTING` is on (the default). The first configure needs internet access. To build only the library, with no download, pass `-DBUILD_TESTING=OFF`.
+The tests use [Unity](https://github.com/ThrowTheSwitch/Unity) 2.6 or later (MIT). CMake uses an installed copy if it finds one (a CMake package, or pkg-config); otherwise it downloads v2.6.0, pinned by commit, and only when the tests are being built (`BUILD_TESTING`, on by default when libnostr-c is the top-level project). That first configure needs internet access; later builds reuse the copy in the build folder. To build only the library, with no download, pass `-DBUILD_TESTING=OFF`.
 
 ## Using in Your Project
 

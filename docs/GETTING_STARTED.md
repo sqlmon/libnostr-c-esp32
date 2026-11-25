@@ -52,7 +52,7 @@ You can customize the build with these CMake options:
 # Build shared library (default: static)
 cmake -DBUILD_SHARED_LIBS=ON ..
 
-# Include test suite (on by default)
+# Include test suite (on by default when building libnostr-c itself)
 cmake -DBUILD_TESTING=ON ..
 
 # Include example programs

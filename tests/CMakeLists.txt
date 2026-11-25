@@ -1,18 +1,81 @@
-# Unity (MIT), pinned by commit like every other third-party source CI builds.
-include(FetchContent)
-FetchContent_Declare(unity
-    GIT_REPOSITORY https://github.com/ThrowTheSwitch/Unity.git
-    GIT_TAG 860062d51b2e8a75d150337b63ca2a472840d13c # v2.6.0
-    # Download only. Unity's own CMakeLists.txt adds install rules, which would
-    # make `cmake --install` ship Unity alongside libnostr-c, so point
-    # FetchContent at a folder without one and build the single source here.
-    # (SOURCE_SUBDIR needs CMake 3.18; older versions add Unity's own project,
-    # whose target is named "unity", hence the different name below.)
-    SOURCE_SUBDIR no-cmake
-)
-FetchContent_MakeAvailable(unity)
-add_library(nostr_unity STATIC ${unity_SOURCE_DIR}/src/unity.c)
-target_include_directories(nostr_unity PUBLIC ${unity_SOURCE_DIR}/src)
+# Unity (MIT). An installed copy is used if found: first a CMake package (from
+# Unity's own CMake install), then pkg-config (from its Meson install).
+# Otherwise v2.6.0 is downloaded, pinned by commit like every other third-party
+# source CI builds. Either way the tests link it through nostr_unity, and it is
+# never installed with libnostr-c.
+find_package(unity 2.6 CONFIG QUIET)
+if(NOT TARGET unity::framework)
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(NOSTR_UNITY_PC QUIET IMPORTED_TARGET unity>=2.6)
+    endif()
+    if(NOSTR_UNITY_PC_FOUND)
+        # Unity's Meson install puts unity.h in <includedir>/unity, but the
+        # unity.pc it writes only points at <includedir>, so look in both. A
+        # copy whose header cannot be found is not used, and Unity is
+        # downloaded instead.
+        find_path(NOSTR_UNITY_PC_HEADER_DIR unity.h
+            HINTS ${NOSTR_UNITY_PC_INCLUDE_DIRS} ${NOSTR_UNITY_PC_INCLUDEDIR}
+            PATH_SUFFIXES unity
+            NO_DEFAULT_PATH
+        )
+        if(NOSTR_UNITY_PC_HEADER_DIR)
+            # libunity-dev, a desktop library, also ships a unity.pc and a
+            # unity.h; only ThrowTheSwitch Unity's defines UNITY_VERSION_MAJOR.
+            file(STRINGS "${NOSTR_UNITY_PC_HEADER_DIR}/unity.h" NOSTR_UNITY_PC_MAJOR
+                REGEX "^#define[ \t]+UNITY_VERSION_MAJOR")
+        endif()
+        if(NOT NOSTR_UNITY_PC_MAJOR)
+            message(STATUS "Unity: pkg-config found unity ${NOSTR_UNITY_PC_VERSION} but not ThrowTheSwitch Unity's unity.h, so it is not used")
+            set(NOSTR_UNITY_PC_FOUND FALSE)
+        endif()
+    endif()
+endif()
+
+if(TARGET unity::framework)
+    message(STATUS "Unity: using the installed CMake package in ${unity_DIR}")
+    add_library(nostr_unity INTERFACE)
+    target_link_libraries(nostr_unity INTERFACE unity::framework)
+elseif(NOSTR_UNITY_PC_FOUND)
+    message(STATUS "Unity: using the installed pkg-config package ${NOSTR_UNITY_PC_VERSION}, headers in ${NOSTR_UNITY_PC_HEADER_DIR}")
+    add_library(nostr_unity INTERFACE)
+    target_link_libraries(nostr_unity INTERFACE PkgConfig::NOSTR_UNITY_PC)
+    target_include_directories(nostr_unity INTERFACE ${NOSTR_UNITY_PC_HEADER_DIR})
+else()
+    include(FetchContent)
+    # Download only: Unity's own CMakeLists.txt adds install rules, which would
+    # make `cmake --install` ship Unity alongside libnostr-c, so it never runs
+    # and the single source is built here instead.
+    if(CMAKE_VERSION VERSION_LESS 3.18)
+        # SOURCE_SUBDIR needs 3.18, so populate without adding the project.
+        FetchContent_Declare(unity
+            GIT_REPOSITORY https://github.com/ThrowTheSwitch/Unity.git
+            GIT_TAG 860062d51b2e8a75d150337b63ca2a472840d13c # v2.6.0
+        )
+        FetchContent_GetProperties(unity)
+        if(NOT unity_POPULATED)
+            FetchContent_Populate(unity)
+        endif()
+    else()
+        FetchContent_Declare(unity
+            GIT_REPOSITORY https://github.com/ThrowTheSwitch/Unity.git
+            GIT_TAG 860062d51b2e8a75d150337b63ca2a472840d13c # v2.6.0
+            SOURCE_SUBDIR no-cmake
+        )
+        FetchContent_MakeAvailable(unity)
+    endif()
+    message(STATUS "Unity: no usable installed copy, downloaded v2.6.0")
+    add_library(nostr_unity STATIC ${unity_SOURCE_DIR}/src/unity.c)
+    target_include_directories(nostr_unity PUBLIC ${unity_SOURCE_DIR}/src)
+endif()
+
+# Several tests check with assert(), which NDEBUG removes in Release builds,
+# so keep it undefined for everything built here.
+if(MSVC)
+    add_compile_options(/UNDEBUG)
+else()
+    add_compile_options(-UNDEBUG)
+endif()
 
 add_executable(test_runner
     test_event.c
@@ -98,7 +161,7 @@ endif()
 
 if(NOSTR_FEATURE_NIP44)
     add_executable(test_nip44 test_nip44.c)
-    target_link_libraries(test_nip44 nostr_static)
+    target_link_libraries(test_nip44 nostr_static nostr_unity)
     add_test(NAME nip44_tests COMMAND test_nip44)
 
     add_executable(test_nip44_comprehensive test_nip44_comprehensive.c)

@@ -89,7 +89,7 @@ ctest --verbose
 valgrind --leak-check=full ./tests/test_runner
 ```
 
-The tests use [Unity](https://github.com/ThrowTheSwitch/Unity) v2.6.0, which CMake downloads automatically, pinned by commit, only when the tests are being built (`BUILD_TESTING`, on by default). The first configure needs internet access. To build only the library, with no download, pass `-DBUILD_TESTING=OFF`.
+The tests use [Unity](https://github.com/ThrowTheSwitch/Unity) 2.6 or later (MIT). CMake uses an installed copy if it finds one (a CMake package, or pkg-config); otherwise it downloads v2.6.0, pinned by commit, and only when the tests are being built (`BUILD_TESTING`, on by default when libnostr-c is the top-level project). That first configure needs internet access; later builds reuse the copy in the build folder. To build only the library, with no download, pass `-DBUILD_TESTING=OFF`.
 
 ## Security
 
